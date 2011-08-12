@@ -1,0 +1,40 @@
+#!/bin/sh
+#
+# PROVIDE: redis-cluster
+# REQUIRE: LOGIN
+# BEFORE:  securelevel
+# KEYWORD: shutdown
+
+# Add the following line to /etc/rc.conf to enable `redis':
+#
+#redis_enable="YES"
+#
+
+. /etc/rc.subr
+
+name="redis"
+rcvar=`set_rcvar`
+
+extra_commands="reload"
+
+command="/usr/local/bin/redis-server"
+nodeno=8
+
+# read configuration and set defaults
+load_rc_config "$name"
+: ${redis_enable="NO"}
+: ${redis_user="redis"}
+
+
+
+i=0
+while [ $i != $nodeno ]; do
+  i=`expr $i + 1`
+  nodename="redis-node-$i"
+  config_file="/usr/local/etc/redis/$nodename.conf"
+  command_args="${config_file}"
+  required_files="${config_file}"
+  echo -n "Starting ${nodename}: "
+  pidfile="/var/run/redis/$nodename.pid"
+  run_rc_command "$1"
+done
