@@ -146,12 +146,10 @@ def main():
 
   mig = Migrate(server_old, server_new, dbs)
 
-  r.set(mig.mprefix + 'run', 0)
   #check if script already running
   run = r.get(mig.mprefix + "run")
   if run != None and int(run) == 1:
     exit('another process already running the script')
-
 
   mig.save_keylists()
 
@@ -162,6 +160,8 @@ def main():
     r.set(mig.mprefix + "firstrun", 1)
 
   mig.migrate_db()
+
+  r.set(mig.mprefix + 'run', 0)
 
 if __name__ == "__main__":
   main()

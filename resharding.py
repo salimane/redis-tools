@@ -154,7 +154,6 @@ def main():
   r = redis.Redis(connection_pool=pool)
 
   rsd = Resharding(cluster_old, cluster_new, dbs)
-  r.set(rsd.shardprefix + 'run', 0)
 
   #check if script already running
   run = r.get(rsd.shardprefix + "run")
@@ -168,6 +167,8 @@ def main():
     rsd.flush_cluster_new()
     r.set(rsd.shardprefix + "firstrun", 1)
   rsd.reshard_db()
+
+  r.set(rsd.shardprefix + 'run', 0)
 
 
 if __name__ == "__main__":
