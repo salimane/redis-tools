@@ -117,14 +117,7 @@ class Migrate:
       print "Flushed server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
 
 
-def main():
-  args = sys.argv[1:]
-  if len(args) != 3:
-    exit('Provide exactly 3 araguments. e.g. python migrate.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
-  old = args[0]
-  new = args[1]
-  db = args[2]
-
+def main(old, new, db):
   if (old == new):
     exit('The 2 servers adresses are the same. e.g. python migrate.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
   so = old.split(':')
@@ -164,4 +157,8 @@ def main():
   r.set(mig.mprefix + 'run', 0)
 
 if __name__ == "__main__":
-  main()
+  args = sys.argv[1:]
+  if len(args) != 3:
+    exit('Provide exactly 3 araguments. e.g. python migrate.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
+  old, new, db = args[0], args[1], args[2]
+  main(old, new, db)

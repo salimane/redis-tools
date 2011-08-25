@@ -118,14 +118,7 @@ class Resharding:
         print "Flushed server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
 
 
-def main():
-  args = sys.argv[1:]
-  if len(args) != 3:
-    exit('Provide exactly 3 araguments. e.g. python resharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1')
-  old = args[0]
-  new = args[1]
-  db = args[2]
-
+def main(old, new, db):
   cluster_old = []
   for k in old.split(','):
     so = k.split(':')
@@ -172,4 +165,8 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+  args = sys.argv[1:]
+  if len(args) != 3:
+    exit('Provide exactly 3 araguments. e.g. python resharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1')
+  old, new, db = args[0], args[1], args[2]
+  main(old, new, db)
