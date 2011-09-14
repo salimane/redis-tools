@@ -35,7 +35,7 @@ and continue from there on the next run. It does this until there is no more key
 
 
 
-#**Redis Resharding**
+#**Redis sharding**
 
 Reshard the keys in a number of source redis servers into another number of target cluster of redis servers
 in order to scale an application.
@@ -44,7 +44,7 @@ and continue from there on the next run. It does this until there is no more key
 
 ####Usage:
 
-    python resharding.py [options]
+    python redis-sharding.py [options]
 
 ####Options:
 
@@ -75,13 +75,13 @@ e.g.
 
 ####Examples:
 
-    python resharding.py --help                                show this doc
-    python resharding.py \
+    python redis-sharding.py --help                                show this doc
+    python redis-sharding.py \
     --sources=192.168.0.99:6379,192.168.0.100:6379 \
     --targets=node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379 \
     --databases=2,5
     
-    python resharding.py --limit=1000 \
+    python redis-sharding.py --limit=1000 \
     --sources=192.168.0.99:6379,192.168.0.100:6379 \
     --targets=node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379 \
     --databases=2,5

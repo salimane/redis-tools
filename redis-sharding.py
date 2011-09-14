@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 """
-Redis Resharding
+Redis sharding
 
 Reshard the keys in a number of source redis servers into another number of target cluster of redis servers
 in order to scale an application.
 The script probably needs to be added to a cron job if the keys are a lot because it only reshards a fix number of keys at a time
 and continue from there on the next run. It does this until there is no more keys to reshard
 
-Usage: python resharding.py [options]
+Usage: python redis-sharding.py [options]
 
 Options:
   -l ..., --limit=...         optional numbers of keys to reshard per run, if not defined 10000 is the default . e.g. 1000
@@ -33,13 +33,13 @@ config = {
 
 
 Examples:
-  python resharding.py --help                                show this doc
-  python resharding.py \
+  python redis-sharding.py --help                                show this doc
+  python redis-sharding.py \
   --sources=192.168.0.99:6379,192.168.0.100:6379 \
   --targets=node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379 \
   --databases=2,5
   
-  python resharding.py --limit=1000 \
+  python redis-sharding.py --limit=1000 \
   --sources=192.168.0.99:6379,192.168.0.100:6379 \
   --targets=node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379 \
   --databases=2,5
@@ -59,7 +59,7 @@ import binascii
 import sys
 import getopt
 
-class Resharding:
+class RedisSharding:
   """A class for resharding the keys in a number of source redis servers into another number of target cluster of redis servers
   """
 
@@ -172,6 +172,12 @@ class Resharding:
           elif ktype == 'zset' :
             value = r.zrange(key, 0, -1, withscores=True)
             rr.zadd(key, **dict(value))
+
+          # Handle keys with an expire time set
+          kttl = r.ttl(key)
+          kttl = -1 if kttl is None else int(kttl)
+          if kttl != -1:
+            rr.expire(key, kttl)
           
           moved += 1
 
@@ -203,8 +209,8 @@ def main(sources, targets, databases, limit=None):
     if len(so) == 2:
       sources_cluster.append({'host':so[0], 'port':int(so[1])})
     else:
-      exit("""Supplied sources addresses is wrong. e.g. python resharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
-      try : python resharding.py --help""")
+      exit("""Supplied sources addresses is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
+      try : python redis-sharding.py --help""")
 
   targets_cluster = {}
   for k in targets.split(','):
@@ -214,20 +220,20 @@ def main(sources, targets, databases, limit=None):
       if len(so) == 2:
         targets_cluster[t[0]] = {'host':so[0], 'port':int(so[1])}
       else:
-        exit("""Supplied target addresses is wrong. e.g. python resharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
-        try : python resharding.py --help""")
+        exit("""Supplied target addresses is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
+        try : python redis-sharding.py --help""")
     else:
-      exit("""Supplied target cluster format is wrong. e.g. python resharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
-      try : python resharding.py --help""")
+      exit("""Supplied target cluster format is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
+      try : python redis-sharding.py --help""")
 
   dbs = [int(k) for k in databases.split(',')]
   if len(dbs) < 1:
-    exit("""Supplied list of db is wrong. e.g. python resharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
-    try : python resharding.py --help""")
+    exit("""Supplied list of db is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
+    try : python redis-sharding.py --help""")
 
   r = redis.Redis(connection_pool=redis.ConnectionPool(host=sources_cluster[0]['host'], port=sources_cluster[0]['port'], db=dbs[0]))
 
-  rsd = Resharding(sources_cluster, targets_cluster, dbs)
+  rsd = RedisSharding(sources_cluster, targets_cluster, dbs)
 
   #check if script already running
   run = r.get(rsd.shardprefix + "run")
