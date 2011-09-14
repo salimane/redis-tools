@@ -129,7 +129,7 @@ class RedisCopy:
         ktype = r.type(key)
         #if undefined type go to next key
         if ktype == 'none':
-          continue
+          continue        
           
         #save key to target server-db
         if ktype == 'string' :
@@ -147,6 +147,12 @@ class RedisCopy:
         elif ktype == 'zset' :
           value = r.zrange(key, 0, -1, withscores=True)
           rr.zadd(key, **dict(value))
+
+        # Handle keys with an expire time set
+        kttl = r.ttl(key)
+        kttl = -1 if kttl is None else int(kttl)
+        if kttl != -1:
+          rr.expire(key, kttl)
 
         moved += 1
 
@@ -188,7 +194,7 @@ def main(source, target, databases, limit=None):
   r = redis.Redis(connection_pool=redis.ConnectionPool(host=source_server['host'], port=source_server['port'], db=dbs[0]))
 
   mig = RedisCopy(source_server, target_server, dbs)
-
+  r.set(mig.mprefix + 'run', 0)
   #check if script already running
   run = r.get(mig.mprefix + "run")
   if run is not None and int(run) == 1:
