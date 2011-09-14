@@ -1,35 +1,35 @@
-#**Redis Migrate**
+#**Redis Copy**
 
-Migrate/Copy the keys in a source redis server into another target redis server.
-The script probably needs to be added to a cron job if the keys are a lot because it only migrate a fix number of keys at a time
-and continue from there on the next run. It does this until there is no more keys to migrate/copy
+Redis Copy the keys in a source redis server into another target redis server.
+The script probably needs to be added to a cron job if the keys are a lot because it only copies a fix number of keys at a time
+and continue from there on the next run. It does this until there is no more keys to copy
 
 ####Usage: 
 
-    python migrate.py [options]
+    python redis-copy.py [options]
 
 ####Options:
 
-    -l ..., --limit=...         optional numbers of keys to migrate/copy per run, if not defined 10000 is the default . e.g. 1000
-    -s ..., --source=...       source redis server "ip:port" to copy keys from. e.g. 192.168.0.99:6379
-    -t ..., --target=...       target redis server "ip:port" to copy keys to. e.g. 192.168.0.101:6379
-    -d ..., --databases=...     comma separated list of redis databases to select when migrating/copying. e.g. 2,5
+    -l ..., --limit=...         optional numbers of keys to copy per run, if not defined 10000 is the default . e.g. 1000
+    -s ..., --source=...        source redis server "ip:port" to copy keys from. e.g. 192.168.0.99:6379
+    -t ..., --target=...        target redis server "ip:port" to copy keys to. e.g. 192.168.0.101:6379
+    -d ..., --databases=...     comma separated list of redis databases to select when copying. e.g. 2,5
     -h, --help                  show this help
 
 
 ####Examples:
 
-    python migrate.py --help                                show this doc
-    python migrate.py \
+    python redis-copy.py --help                                show this doc
+    python redis-copy.py \
     --source=192.168.0.99:6379 \
     --target=192.168.0.101:6379 \
-    --databases=2,5                                         migrate/copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
+    --databases=2,5                                         copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
                                                           with the default limit of 10000 per script run
 
-    python resharding.py --limit=1000 \
+    python redis-copy.py --limit=1000 \
     --source=192.168.0.99:6379 \
     --target=192.168.0.101:6379 \
-    --databases=2,5                                         migrate/copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
+    --databases=2,5                                         copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
                                                           with a limit of 1000 per script run
 
 

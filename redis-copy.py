@@ -1,33 +1,33 @@
 #!/usr/bin/env python
 """
-Redis Migrate
+Redis Copy
 
-Migrate/Copy the keys in a source redis server into another target redis server.
-The script probably needs to be added to a cron job if the keys are a lot because it only migrate a fix number of keys at a time
-and continue from there on the next run. It does this until there is no more keys to migrate/copy
+Redis Copy the keys in a source redis server into another target redis server.
+The script probably needs to be added to a cron job if the keys are a lot because it only copies a fix number of keys at a time
+and continue from there on the next run. It does this until there is no more keys to copy
 
-Usage: python migrate.py [options]
+Usage: python redis-copy.py [options]
 
 Options:
-  -l ..., --limit=...         optional numbers of keys to migrate/copy per run, if not defined 10000 is the default . e.g. 1000
-  -s ..., --source=...       source redis server "ip:port" to copy keys from. e.g. 192.168.0.99:6379
-  -t ..., --target=...       target redis server "ip:port" to copy keys to. e.g. 192.168.0.101:6379
-  -d ..., --databases=...     comma separated list of redis databases to select when migrating/copying. e.g. 2,5
+  -l ..., --limit=...         optional numbers of keys to copy per run, if not defined 10000 is the default . e.g. 1000
+  -s ..., --source=...        source redis server "ip:port" to copy keys from. e.g. 192.168.0.99:6379
+  -t ..., --target=...        target redis server "ip:port" to copy keys to. e.g. 192.168.0.101:6379
+  -d ..., --databases=...     comma separated list of redis databases to select when copying. e.g. 2,5
   -h, --help                  show this help
 
 
 Examples:
-  python migrate.py --help                                show this doc
-  python migrate.py \
+  python redis-copy.py --help                                show this doc
+  python redis-copy.py \
   --source=192.168.0.99:6379 \
   --target=192.168.0.101:6379 \
-  --databases=2,5                                         migrate/copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
+  --databases=2,5                                         copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
                                                           with the default limit of 10000 per script run
 
-  python resharding.py --limit=1000 \
+  python redis-copy.py --limit=1000 \
   --source=192.168.0.99:6379 \
   --target=192.168.0.101:6379 \
-  --databases=2,5                                         migrate/copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
+  --databases=2,5                                         copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
                                                           with a limit of 1000 per script run
 
 """
@@ -44,8 +44,8 @@ from datetime import datetime
 import sys
 import getopt
 
-class Migrate:
-  """A class for migrating keys from one server to another.
+class RedisCopy:
+  """A class for copying keys from one server to another.
   """
 
   #some key prefix for this script
@@ -53,7 +53,7 @@ class Migrate:
   keylistprefix = 'keylist:'
   hkeylistprefix = 'havekeylist:'
 
-  # numbers of keys to resharding on each iteration
+  # numbers of keys to copy on each iteration
   limit = 10000
 
   def __init__(self, source, target, dbs):
@@ -87,9 +87,9 @@ class Migrate:
       print "ALL %d keys of %s already inserted to temp keylist ...\n\n" % (dbsize-1, servername)
 
 
-  def migrate_db(self, limit=None):
-    """Function to migrate/copy all the keys from the source into the new target.
-    - limit : optional numbers of keys to migrate/copy per run
+  def copy_db(self, limit=None):
+    """Function to copy all the keys from the source into the new target.
+    - limit : optional numbers of keys to copy per run
     """
 
     #set the limit per run
@@ -102,7 +102,7 @@ class Migrate:
 
     for db in self.dbs:
       servername = self.source['host'] + ":" + str(self.source['port']) + ":" + str(db)
-      print "Processing keys migration of server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "Processing keys copying of server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
       #get redis handle for current source server-db
       r = redis.Redis(connection_pool=redis.ConnectionPool(host=self.source['host'], port=self.source['port'], db=db))
       moved = 0
@@ -110,13 +110,13 @@ class Migrate:
       #get keys already moved
       keymoved = r.get(self.mprefix + "keymoved:" + servername)
       keymoved = 0 if keymoved is None else int(keymoved)
-      #check if we already have all keys migrated for current source server-db
+      #check if we already have all keys copied for current source server-db
       if dbsize < keymoved:
-        print "ALL %d keys from %s have already been migrated.\n" % (dbsize, servername)
+        print "ALL %d keys from %s have already been copied.\n" % (dbsize, servername)
         continue
 
 
-      print "Started migration of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "Started copy of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
 
       #get redis handle for corresponding target server-db
       rr = redis.Redis(connection_pool=redis.ConnectionPool(host=self.target['host'], port=self.target['port'], db=db))
@@ -151,10 +151,10 @@ class Migrate:
         moved += 1
 
         if moved % 10000 == 0:
-          print "%d keys have been migrated on %s at %s...\n" % (moved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+          print "%d keys have been copied on %s at %s...\n" % (moved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
 
       r.set(self.mprefix + "keymoved:" + servername, newkeymoved)
-      print "%d keys have been migrated on %s at %s\n" % (newkeymoved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "%d keys have been copied on %s at %s\n" % (newkeymoved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
 
 
   def flush_target(self):
@@ -170,24 +170,24 @@ class Migrate:
 
 def main(source, target, databases, limit=None):
   if (source == target):
-    exit('The 2 servers adresses are the same. e.g. python migrate.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
+    exit('The 2 servers adresses are the same. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
   so = source.split(':')
   if len(so) == 2:
     source_server = {'host':so[0], 'port':int(so[1])}
   else:
-    exit('Supplied old server address is wrong. e.g. python migrate.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
+    exit('Supplied old server address is wrong. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
   sn = target.split(':')
   if len(sn) == 2:
     target_server = {'host':sn[0], 'port':int(sn[1])}
   else:
-    exit('Supplied new server address is wrong. e.g. python migrate.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
+    exit('Supplied new server address is wrong. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
   dbs = [int(k) for k in databases.split(',')]
   if len(dbs) < 1:
-    exit('Supplied list of db is wrong. e.g. python migrate.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
+    exit('Supplied list of db is wrong. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
 
   r = redis.Redis(connection_pool=redis.ConnectionPool(host=source_server['host'], port=source_server['port'], db=dbs[0]))
 
-  mig = Migrate(source_server, target_server, dbs)
+  mig = RedisCopy(source_server, target_server, dbs)
 
   #check if script already running
   run = r.get(mig.mprefix + "run")
@@ -204,7 +204,7 @@ def main(source, target, databases, limit=None):
     mig.flush_target()
     r.set(mig.mprefix + "firstrun", 1)
 
-  mig.migrate_db(limit)
+  mig.copy_db(limit)
 
   r.set(mig.mprefix + 'run', 0)
 
