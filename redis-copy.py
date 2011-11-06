@@ -146,7 +146,9 @@ class RedisCopy:
           rr.sadd(key, *value)
         elif ktype == 'zset' :
           value = r.zrange(key, 0, -1, withscores=True)
-          rr.zadd(key, **dict(value))
+      	  for k,v in value:
+            rr.zadd(key, k, v)
+          #rr.zadd(key, **dict(value))
 
         # Handle keys with an expire time set
         kttl = r.ttl(key)
