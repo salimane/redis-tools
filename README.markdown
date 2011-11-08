@@ -4,7 +4,7 @@ Redis Copy the keys in a source redis server into another target redis server.
 The script probably needs to be added to a cron job if the keys are a lot because it only copies a fix number of keys at a time
 and continue from there on the next run. It does this until there is no more keys to copy
 
-####Usage: 
+####Usage:
 
     python redis-copy.py [options]
 
@@ -15,11 +15,18 @@ and continue from there on the next run. It does this until there is no more key
     -t ..., --target=...        target redis server "ip:port" to copy keys to. e.g. 192.168.0.101:6379
     -d ..., --databases=...     comma separated list of redis databases to select when copying. e.g. 2,5
     -h, --help                  show this help
+    --clean                     clean all variables, temp lists created previously by the script
 
 
 ####Examples:
 
     python redis-copy.py --help                                show this doc
+
+    python redis-copy.py \
+    --source=192.168.0.99:6379 \
+    --target=192.168.0.101:6379 \
+    --databases=2,5 --clean                                 clean all variables, temp lists created previously by the script
+
     python redis-copy.py \
     --source=192.168.0.99:6379 \
     --target=192.168.0.101:6379 \
@@ -80,9 +87,8 @@ e.g.
     --sources=192.168.0.99:6379,192.168.0.100:6379 \
     --targets=node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379 \
     --databases=2,5
-    
+
     python redis-sharding.py --limit=1000 \
     --sources=192.168.0.99:6379,192.168.0.100:6379 \
     --targets=node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379 \
     --databases=2,5
-

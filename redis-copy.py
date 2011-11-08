@@ -20,7 +20,12 @@ Dependencies: redis (redis-py: sudo pip install redis)
 
 Examples:
   python redis-copy.py --help                                show this doc
-  python redis-copy.py --clean                               clean all variables, temp lists created previously by the script
+  
+  python redis-copy.py \
+  --source=192.168.0.99:6379 \
+  --target=192.168.0.101:6379 \
+  --databases=2,5 --clean                                 clean all variables, temp lists created previously by the script
+  
   python redis-copy.py \
   --source=192.168.0.99:6379 \
   --target=192.168.0.101:6379 \
