@@ -196,8 +196,10 @@ class RedisCopy:
       servername = self.source['host'] + ":" + str(self.source['port']) + ":" + str(db)
       r = redis.StrictRedis(host=self.source['host'], port=self.source['port'], db=db)
       r.delete(self.mprefix + "keymoved:" + servername)
-      r.delete(self.mprefix + "keylist:" + servername)
-      r.delete(self.mprefix + "havekeylist:" + servername)
+      r.delete(self.mprefix + self.keylistprefix + servername)
+      r.delete(self.mprefix + self.hkeylistprefix + servername)
+      r.delete(self.mprefix + "firstrun")
+      r.delete(self.mprefix + 'run')
     print "Done.\n"
 
 
@@ -222,24 +224,20 @@ def main(source, target, databases, limit=None, clean=False):
   if len(dbs) < 1:
     exit('Supplied list of db is wrong. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
 
-
   try:
     r = redis.StrictRedis(host=source_server['host'], port=source_server['port'], db=dbs[0])
   except AttributeError as e:
     exit('Please this script requires redis-py >= 2.4.10, your current version is :'+redis.__version__)
 
-
-  mig = RedisCopy(source_server, target_server, dbs)
-
-  r.set(mig.mprefix + 'run', 0)
-  #check if script already running
-  run = r.get(mig.mprefix + "run")
-  if run is not None and int(run) == 1:
-    exit('another process already running the script')
-
-  r.set(mig.mprefix + 'run', 1)
+  mig = RedisCopy(source_server, target_server, dbs)  
 
   if clean == False:
+    #check if script already running
+    run = r.get(mig.mprefix + "run")
+    if run is not None and int(run) == 1:
+      exit('another process already running the script')
+    r.set(mig.mprefix + 'run', 1)       
+    
     mig.save_keylists()
 
     firstrun = r.get(mig.mprefix + "firstrun")
