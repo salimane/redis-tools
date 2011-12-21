@@ -48,7 +48,7 @@ __license__ = "Python"
 
 
 import redis
-from datetime import datetime
+import time
 import sys
 import getopt
 
@@ -88,7 +88,7 @@ class RedisCopy:
           moved += 1
           r.rpush(self.mprefix + self.keylistprefix + servername, key)
           if moved % self.limit == 0:
-            print  "%d keys of %s inserted in temp keylist at %s...\n" % (moved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+            print  "%d keys of %s inserted in temp keylist at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
 
         r.set(self.mprefix + self.hkeylistprefix + servername, 1)
       print "ALL %d keys of %s already inserted to temp keylist ...\n\n" % (dbsize-1, servername)
@@ -109,7 +109,7 @@ class RedisCopy:
 
     for db in self.dbs:
       servername = self.source['host'] + ":" + str(self.source['port']) + ":" + str(db)
-      print "Processing keys copying of server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "Processing keys copying of server %s at %s...\n" % (servername, time.strftime("%Y-%m-%d %I:%M:%S"))
       #get redis handle for current source server-db
       r = redis.StrictRedis(host=self.source['host'], port=self.source['port'], db=db)
       moved = 0
@@ -123,7 +123,7 @@ class RedisCopy:
         continue
 
 
-      print "Started copy of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "Started copy of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, time.strftime("%Y-%m-%d %I:%M:%S"))
 
       #get redis handle for corresponding target server-db
       rr = redis.StrictRedis(host=self.target['host'], port=self.target['port'], db=db)
@@ -170,10 +170,10 @@ class RedisCopy:
         moved += 1
 
         if moved % 10000 == 0:
-          print "%d keys have been copied on %s at %s...\n" % (moved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+          print "%d keys have been copied on %s at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
 
       r.set(self.mprefix + "keymoved:" + servername, newkeymoved)
-      print "%d keys have been copied on %s at %s\n" % (newkeymoved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "%d keys have been copied on %s at %s\n" % (newkeymoved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
 
 
   def flush_target(self):
@@ -181,10 +181,10 @@ class RedisCopy:
     """
     for db in self.dbs:
       servername = self.target['host'] + ":" + str(self.target['port']) + ":" + str(db)
-      print "Flushing server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "Flushing server %s at %s...\n" % (servername, time.strftime("%Y-%m-%d %I:%M:%S"))
       r = redis.StrictRedis(host=self.target['host'], port=self.target['port'], db=db)
       r.flushdb()
-      print "Flushed server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "Flushed server %s at %s...\n" % (servername, time.strftime("%Y-%m-%d %I:%M:%S"))
 
 
   def clean(self):
@@ -265,11 +265,8 @@ if __name__ == "__main__":
     usage()
     sys.exit(2)
   for opt, arg in opts:
-    if opt in ("-h", "--help"):
-      usage()
-      sys.exit()
-    elif opt == "--clean":
-      clean = True
+    if opt in ("-h", "--help"): usage(); sys.exit()
+    elif opt == "--clean": clean = True
     elif opt in ("-l", "--limit"): limit = arg
     elif opt in ("-s", "--source"): source = arg
     elif opt in ("-t", "--target"): target = arg

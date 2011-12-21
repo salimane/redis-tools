@@ -63,7 +63,7 @@ __license__ = "Python"
 
 
 import redis
-from datetime import datetime
+import time
 import binascii
 import sys
 import getopt
@@ -113,7 +113,7 @@ class RedisSharding:
             moved += 1
             r.rpush(self.shardprefix + self.keylistprefix + servername, key)
             if moved % self.limit == 0:
-              print  "%d keys of %s inserted in temp keylist at %s...\n" % (moved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+              print  "%d keys of %s inserted in temp keylist at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
 
           r.set(self.shardprefix + self.hkeylistprefix + servername, 1)
         print "ALL %d keys of %s already inserted to temp keylist ...\n\n" % (dbsize-1, servername)
@@ -135,7 +135,7 @@ class RedisSharding:
     for server in self.sources:
       for db in self.dbs:
         servername = server['host'] + ":" + str(server['port']) + ":" + str(db)
-        print "Processing keys resharding of server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+        print "Processing keys resharding of server %s at %s...\n" % (servername, time.strftime("%Y-%m-%d %I:%M:%S"))
         #get redis handle for current source server-db
         r = redis.StrictRedis(host=server['host'], port=server['port'], db=db)
         moved = 0
@@ -149,7 +149,7 @@ class RedisSharding:
           #move to next source server-db in iteration
           continue
 
-        print "Started resharding of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+        print "Started resharding of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, time.strftime("%Y-%m-%d %I:%M:%S"))
         #max index for lrange
         newkeymoved = keymoved+self.limit if dbsize > keymoved+self.limit else dbsize
 
@@ -196,10 +196,10 @@ class RedisSharding:
           moved += 1
 
           if moved % 10000 == 0:
-            print "%d keys have been resharded on %s at %s...\n" % (moved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+            print "%d keys have been resharded on %s at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
 
         r.set(self.shardprefix + "keymoved:" + servername, newkeymoved)
-        print "%d keys have been resharded on %s at %s\n" % (newkeymoved, servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+        print "%d keys have been resharded on %s at %s\n" % (newkeymoved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
 
 
   def flush_targets(self):
@@ -210,10 +210,10 @@ class RedisSharding:
       server = handle[:handle.rfind('_')]
       db = handle[handle.rfind('_')+1:]
       servername = self.targets[server]['host'] + ":" + str(self.targets[server]['port']) + ":" + db
-      print "Flushing server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "Flushing server %s at %s...\n" % (servername, time.strftime("%Y-%m-%d %I:%M:%S"))
       r = self.targets_redis[handle]
       r.flushdb()
-      print "Flushed server %s at %s...\n" % (servername, datetime.now().strftime("%Y-%m-%d %I:%M:%S"))
+      print "Flushed server %s at %s...\n" % (servername, time.strftime("%Y-%m-%d %I:%M:%S"))
 
 
   def clean(self):
@@ -303,11 +303,8 @@ if __name__ == "__main__":
     usage()
     sys.exit(2)
   for opt, arg in opts:
-    if opt in ("-h", "--help"):
-      usage()
-      sys.exit()
-    elif opt == "--clean":
-      clean = True
+    if opt in ("-h", "--help"): usage(); sys.exit()
+    elif opt == "--clean": clean = True
     elif opt in ("-l", "--limit"): limit = arg
     elif opt in ("-s", "--sources"): sources = arg
     elif opt in ("-t", "--targets"): targets = arg
@@ -318,7 +315,7 @@ if __name__ == "__main__":
   except (NameError, TypeError, ValueError):
     limit = None
 
-  #try:
-  main(sources, targets, databases, limit, clean)
-  #except NameError as e:
-    #usage()
+  try:
+    main(sources, targets, databases, limit, clean)
+  except NameError as e:
+    usage()
