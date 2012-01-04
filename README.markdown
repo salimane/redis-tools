@@ -4,6 +4,10 @@ Redis Copy the keys in a source redis server into another target redis server.
 The script probably needs to be added to a cron job if the keys are a lot because it only copies a fix number of keys at a time
 and continue from there on the next run. It does this until there is no more keys to copy
 
+####Dependency:
+
+    sudo easy_install -U redis
+
 ####Usage:
 
     python redis-copy.py [options]
@@ -48,6 +52,10 @@ Reshard the keys in a number of source redis servers into another number of targ
 in order to scale an application.
 The script probably needs to be added to a cron job if the keys are a lot because it only reshards a fix number of keys at a time
 and continue from there on the next run. It does this until there is no more keys to reshard
+
+####Dependency:
+
+    sudo easy_install -U redis
 
 ####Usage:
 
