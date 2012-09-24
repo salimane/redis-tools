@@ -107,3 +107,40 @@ e.g.
     --sources=192.168.0.99:6379,192.168.0.100:6379 \
     --targets="node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379" \
     --databases=2,5
+
+
+
+#**Redis Memory Stats**
+
+A memory size analyzer that parses the output of the memory report of rdb <https://github.com/sripathikrishnan/redis-rdb-tools>
+ for memory size stats about key patterns
+At its core, RedisMemStats uses the output of the memory report of rdb, which echoes a csv row line for every key
+stored to a Redis instance.
+It parses these lines, and aggregates stats on the most memory consuming keys, prefixes, dbs and redis data structures.
+
+####Usage:
+
+    rdb -c memory <REDIS dump.rdb TO ANALYZE> | ./redis-mem-stats.py [options]
+
+    OR
+
+    rdb -c memory <REDIS dump.rdb TO ANALYZE> > <OUTPUT CSV FILE>
+    ./redis-mem-stats.py [options] <OUTPUT CSV FILE>
+
+####Options:
+
+    --prefix-delimiter=...           String to split on for delimiting prefix and rest of key, if not provided `:` is the default . --prefix-delimiter=#
+
+
+####Dependencies:
+
+	rdb (redis-rdb-tools: https://github.com/sripathikrishnan/redis-rdb-tools)
+
+####Examples:
+
+    rdb -c memory /var/lib/redis/dump.rdb > /tmp/outfile.csv
+	./redis-mem-stats.py /tmp/outfile.csv
+
+	or
+
+	rdb -c memory /var/lib/redis/dump.rdb | ./redis-mem-stats.py
