@@ -42,12 +42,12 @@ Examples:
   --targets="node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379" \
   --databases=2,5 --clean
 
-  
+
   python redis-sharding.py \
   --sources=192.168.0.99:6379,192.168.0.100:6379 \
   --targets="node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379" \
   --databases=2,5
-  
+
   python redis-sharding.py --limit=1000 \
   --sources=192.168.0.99:6379,192.168.0.100:6379 \
   --targets="node_1#192.168.0.101:6379,node_2#192.168.0.102:6379,node_3#192.168.0.103:6379" \
@@ -59,7 +59,7 @@ __author__ = "Salimane Adjao Moustapha (salimane@gmail.com)"
 __version__ = "$Revision: 1.0 $"
 __date__ = "$Date: 2011/06/09 12:57:19 $"
 __copyleft__ = "Copyleft (c) 2011 Salimane Adjao Moustapha"
-__license__ = "Python"
+__license__ = "MIT"
 
 
 import redis
@@ -68,254 +68,276 @@ import binascii
 import sys
 import getopt
 
+
 class RedisSharding:
-  """A class for resharding the keys in a number of source redis servers into another number of target cluster of redis servers
-  """
-
-  #some key prefix for this script
-  shardprefix = 'rsk:'
-  keylistprefix = 'keylist:'
-  hkeylistprefix = 'havekeylist:'
-
-  # hold the redis handle of the targets cluster
-  targets_redis = {}
-  
-  # numbers of keys to resharding on each iteration
-  limit = 10000
-
-  def __init__(self, sources, targets, dbs):
-    self.sources = sources
-    self.targets = targets
-    self.len_targets = len(targets)
-    self.dbs = dbs
-    for node in self.targets:
-      for db in self.dbs:
-        self.targets_redis[node+'_'+str(db)] = redis.StrictRedis(host=self.targets[node]['host'], port=self.targets[node]['port'], db=db)
-
-
-  def save_keylists(self):
-    """Function for each server in the sources, save all its keys' names into a list for later usage.
-    """
-    
-    for server in self.sources:
-      for db in self.dbs:
-        servername = server['host'] + ":" + str(server['port']) + ":" + str(db)
-        #get redis handle for server-db
-        r = redis.StrictRedis(host=server['host'], port=server['port'], db=db)
-        dbsize = r.dbsize()
-        #check whether we already have the list, if not get it
-        hkl = r.get(self.shardprefix + self.hkeylistprefix + servername)
-        if hkl is None or int(hkl) != 1:
-          print "Saving the keys in %s to temp keylist...\n" % servername
-          moved = 0
-          r.delete(self.shardprefix + self.keylistprefix + servername)
-          for key in r.keys('*'):
-            moved += 1
-            r.rpush(self.shardprefix + self.keylistprefix + servername, key)
-            if moved % self.limit == 0:
-              print  "%d keys of %s inserted in temp keylist at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
-
-          r.set(self.shardprefix + self.hkeylistprefix + servername, 1)
-        print "ALL %d keys of %s already inserted to temp keylist ...\n\n" % (dbsize-1, servername)
-
-
-  def reshard_db(self, limit=None):
-    """Function for each server in the sources, reshard all its keys into the new target cluster.
-    - limit : optional numbers of keys to reshard per run
+    """A class for resharding the keys in a number of source redis servers into another number of target cluster of redis servers
     """
 
-    #set the limit per run
-    try:
-      limit = int(limit)
-    except (ValueError, TypeError):
-      limit = None
+    #some key prefix for this script
+    shardprefix = 'rsk:'
+    keylistprefix = 'keylist:'
+    hkeylistprefix = 'havekeylist:'
 
-    if limit is not None: self.limit = limit          
-    
-    for server in self.sources:
-      for db in self.dbs:
-        servername = server['host'] + ":" + str(server['port']) + ":" + str(db)
-        print "Processing keys resharding of server %s at %s...\n" % (servername, time.strftime("%Y-%m-%d %I:%M:%S"))
-        #get redis handle for current source server-db
-        r = redis.StrictRedis(host=server['host'], port=server['port'], db=db)
-        moved = 0
-        dbsize = r.dbsize() - 1
-        #get keys already moved
-        keymoved = r.get(self.shardprefix + "keymoved:" + servername)
-        keymoved = 0 if keymoved is None else int(keymoved)
-        #check if we already have all keys resharded for current source server-db
-        if dbsize <= keymoved:
-          print "ALL %d keys from %s have already been resharded.\n" % (dbsize, servername)
-          #move to next source server-db in iteration
-          continue
+    # hold the redis handle of the targets cluster
+    targets_redis = {}
 
-        print "Started resharding of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, time.strftime("%Y-%m-%d %I:%M:%S"))
-        #max index for lrange
-        newkeymoved = keymoved+self.limit if dbsize > keymoved+self.limit else dbsize
+    # numbers of keys to resharding on each iteration
+    limit = 10000
 
-        for key in r.lrange(self.shardprefix + self.keylistprefix + servername, keymoved, newkeymoved):
-          #calculate reshard node of key
-          node = str((abs(binascii.crc32(key) & 0xffffffff) % self.len_targets) + 1)
-          #get key type
-          ktype = r.type(key)
-          #if undefined type go to next key
-          if ktype == 'none':
-            continue
+    def __init__(self, sources, targets, dbs):
+        self.sources = sources
+        self.targets = targets
+        self.len_targets = len(targets)
+        self.dbs = dbs
+        for node in self.targets:
+            for db in self.dbs:
+                self.targets_redis[node + '_' + str(db)] = redis.StrictRedis(host=self.targets[node]['host'], port=self.targets[node]['port'], db=db)
 
-          #get redis handle for corresponding target server-db
-          rr = self.targets_redis['node_'+node+'_'+str(db)]
-          #save key to new cluster server-db
-          if ktype == 'string' :
-            rr.set(key, r.get(key))
-          elif ktype == 'hash' :
-            rr.hmset(key, r.hgetall(key))
-          elif ktype == 'list' :
-            if key == self.shardprefix + "keylist:" + servername:
-              continue
-            #value = r.lrange(key, 0, -1)
-            #rr.rpush(key, *value)
-            for k in r.lrange(key, 0, -1):
-              rr.rpush(key, k)
-          elif ktype == 'set' :
-            #value = r.smembers(key)
-            #rr.sadd(key, *value)
-            for k in r.smembers(key):
-              rr.sadd(key, k)
-          elif ktype == 'zset' :
-            #value = r.zrange(key, 0, -1, withscores=True)
-            #rr.zadd(key, **dict(value))
-            for k,v in r.zrange(key, 0, -1, withscores=True):
-              rr.zadd(key, v, k)
+    def save_keylists(self):
+        """Function for each server in the sources, save all its keys' names into a list for later usage.
+        """
 
-          # Handle keys with an expire time set
-          kttl = r.ttl(key)
-          kttl = -1 if kttl is None else int(kttl)
-          if kttl != -1:
-            rr.expire(key, kttl)
-          
-          moved += 1
+        for server in self.sources:
+            for db in self.dbs:
+                servername = server['host'] + ":" + str(
+                    server['port']) + ":" + str(db)
+                #get redis handle for server-db
+                r = redis.StrictRedis(
+                    host=server['host'], port=server['port'], db=db)
+                dbsize = r.dbsize()
+                #check whether we already have the list, if not get it
+                hkl = r.get(
+                    self.shardprefix + self.hkeylistprefix + servername)
+                if hkl is None or int(hkl) != 1:
+                    print "Saving the keys in %s to temp keylist...\n" % servername
+                    moved = 0
+                    r.delete(
+                        self.shardprefix + self.keylistprefix + servername)
+                    for key in r.keys('*'):
+                        moved += 1
+                        r.rpush(self.shardprefix +
+                                self.keylistprefix + servername, key)
+                        if moved % self.limit == 0:
+                            print  "%d keys of %s inserted in temp keylist at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
 
-          if moved % 10000 == 0:
-            print "%d keys have been resharded on %s at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+                    r.set(self.shardprefix +
+                          self.hkeylistprefix + servername, 1)
+                print "ALL %d keys of %s already inserted to temp keylist ...\n\n" % (dbsize - 1, servername)
 
-        r.set(self.shardprefix + "keymoved:" + servername, newkeymoved)
-        print "%d keys have been resharded on %s at %s\n" % (newkeymoved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+    def reshard_db(self, limit=None):
+        """Function for each server in the sources, reshard all its keys into the new target cluster.
+        - limit : optional numbers of keys to reshard per run
+        """
 
+        #set the limit per run
+        try:
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = None
 
-  def flush_targets(self):
-    """Function to flush all targets server in the new cluster.
-    """
-    
-    for handle in self.targets_redis:
-      server = handle[:handle.rfind('_')]
-      db = handle[handle.rfind('_')+1:]
-      servername = self.targets[server]['host'] + ":" + str(self.targets[server]['port']) + ":" + db
-      print "Flushing server %s at %s...\n" % (servername, time.strftime("%Y-%m-%d %I:%M:%S"))
-      r = self.targets_redis[handle]
-      r.flushdb()
-      print "Flushed server %s at %s...\n" % (servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+        if limit is not None:
+            self.limit = limit
 
+        for server in self.sources:
+            for db in self.dbs:
+                servername = server['host'] + ":" + str(
+                    server['port']) + ":" + str(db)
+                print "Processing keys resharding of server %s at %s...\n" % (
+                    servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+                #get redis handle for current source server-db
+                r = redis.StrictRedis(
+                    host=server['host'], port=server['port'], db=db)
+                moved = 0
+                dbsize = r.dbsize() - 1
+                #get keys already moved
+                keymoved = r.get(self.shardprefix + "keymoved:" + servername)
+                keymoved = 0 if keymoved is None else int(keymoved)
+                #check if we already have all keys resharded for current source server-db
+                if dbsize <= keymoved:
+                    print "ALL %d keys from %s have already been resharded.\n" % (dbsize, servername)
+                    #move to next source server-db in iteration
+                    continue
 
-  def clean(self):
-    """Function to clean all variables, temp lists created previously by the script.
-    """
+                print "Started resharding of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, time.strftime("%Y-%m-%d %I:%M:%S"))
+                #max index for lrange
+                newkeymoved = keymoved + \
+                    self.limit if dbsize > keymoved + self.limit else dbsize
 
-    print "Cleaning all temp variables...\n"
-    for server in self.sources:
-      for db in self.dbs:
-        servername = server['host'] + ":" + str(server['port']) + ":" + str(db)
-        r = redis.StrictRedis(host=server['host'], port=server['port'], db=db)
-        r.delete(self.shardprefix + "keymoved:" + servername)
-        r.delete(self.shardprefix + self.keylistprefix + servername)
-        r.delete(self.shardprefix + self.hkeylistprefix + servername)
-        r.delete(self.shardprefix + "firstrun")
-        r.delete(self.shardprefix + 'run')
-    print "Done.\n"
+                for key in r.lrange(self.shardprefix + self.keylistprefix + servername, keymoved, newkeymoved):
+                    #calculate reshard node of key
+                    node = str((abs(binascii.crc32(
+                        key) & 0xffffffff) % self.len_targets) + 1)
+                    #get key type
+                    ktype = r.type(key)
+                    #if undefined type go to next key
+                    if ktype == 'none':
+                        continue
+
+                    #get redis handle for corresponding target server-db
+                    rr = self.targets_redis['node_' + node + '_' + str(db)]
+                    #save key to new cluster server-db
+                    if ktype == 'string':
+                        rr.set(key, r.get(key))
+                    elif ktype == 'hash':
+                        rr.hmset(key, r.hgetall(key))
+                    elif ktype == 'list':
+                        if key == self.shardprefix + "keylist:" + servername:
+                            continue
+                        #value = r.lrange(key, 0, -1)
+                        #rr.rpush(key, *value)
+                        for k in r.lrange(key, 0, -1):
+                            rr.rpush(key, k)
+                    elif ktype == 'set':
+                        #value = r.smembers(key)
+                        #rr.sadd(key, *value)
+                        for k in r.smembers(key):
+                            rr.sadd(key, k)
+                    elif ktype == 'zset':
+                        #value = r.zrange(key, 0, -1, withscores=True)
+                        #rr.zadd(key, **dict(value))
+                        for k, v in r.zrange(key, 0, -1, withscores=True):
+                            rr.zadd(key, v, k)
+
+                    # Handle keys with an expire time set
+                    kttl = r.ttl(key)
+                    kttl = -1 if kttl is None else int(kttl)
+                    if kttl != -1:
+                        rr.expire(key, kttl)
+
+                    moved += 1
+
+                    if moved % 10000 == 0:
+                        print "%d keys have been resharded on %s at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+
+                r.set(self.shardprefix + "keymoved:" + servername, newkeymoved)
+                print "%d keys have been resharded on %s at %s\n" % (newkeymoved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+
+    def flush_targets(self):
+        """Function to flush all targets server in the new cluster.
+        """
+
+        for handle in self.targets_redis:
+            server = handle[:handle.rfind('_')]
+            db = handle[handle.rfind('_') + 1:]
+            servername = self.targets[server]['host'] + ":" + \
+                str(self.targets[server]['port']) + ":" + db
+            print "Flushing server %s at %s...\n" % (
+                servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+            r = self.targets_redis[handle]
+            r.flushdb()
+            print "Flushed server %s at %s...\n" % (
+                servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+
+    def clean(self):
+        """Function to clean all variables, temp lists created previously by the script.
+        """
+
+        print "Cleaning all temp variables...\n"
+        for server in self.sources:
+            for db in self.dbs:
+                servername = server['host'] + ":" + str(
+                    server['port']) + ":" + str(db)
+                r = redis.StrictRedis(
+                    host=server['host'], port=server['port'], db=db)
+                r.delete(self.shardprefix + "keymoved:" + servername)
+                r.delete(self.shardprefix + self.keylistprefix + servername)
+                r.delete(self.shardprefix + self.hkeylistprefix + servername)
+                r.delete(self.shardprefix + "firstrun")
+                r.delete(self.shardprefix + 'run')
+        print "Done.\n"
 
 
 def main(sources, targets, databases, limit=None, clean=False):
-  sources_cluster = []
-  for k in sources.split(','):
-    so = k.split(':')
-    if len(so) == 2:
-      sources_cluster.append({'host':so[0], 'port':int(so[1])})
-    else:
-      exit("""Supplied sources addresses is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
-      try : python redis-sharding.py --help""")
+    sources_cluster = []
+    for k in sources.split(','):
+        so = k.split(':')
+        if len(so) == 2:
+            sources_cluster.append({'host': so[0], 'port': int(so[1])})
+        else:
+            exit("""Supplied sources addresses is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
+            try : python redis-sharding.py --help""")
 
-  targets_cluster = {}
-  for k in targets.split(','):
-    t = k.split('#')
-    if len(t) == 2:
-      so = t[1].split(':')
-      if len(so) == 2:
-        targets_cluster[t[0]] = {'host':so[0], 'port':int(so[1])}
-      else:
-        exit("""Supplied target addresses is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
+    targets_cluster = {}
+    for k in targets.split(','):
+        t = k.split('#')
+        if len(t) == 2:
+            so = t[1].split(':')
+            if len(so) == 2:
+                targets_cluster[t[0]] = {'host': so[0], 'port': int(so[1])}
+            else:
+                exit("""Supplied target addresses is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
+                try : python redis-sharding.py --help""")
+        else:
+            exit("""Supplied target cluster format is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
+            try : python redis-sharding.py --help""")
+
+    dbs = [int(k) for k in databases.split(',')]
+    if len(dbs) < 1:
+        exit("""Supplied list of db is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
         try : python redis-sharding.py --help""")
+
+    try:
+        r = redis.StrictRedis(host=sources_cluster[0]['host'],
+                              port=sources_cluster[0]['port'], db=dbs[0])
+    except AttributeError as e:
+        exit('Please this script requires redis-py >= 2.4.10, your current version is :' + redis.__version__)
+
+    rsd = RedisSharding(sources_cluster, targets_cluster, dbs)
+
+    if clean == False:
+        #check if script already running
+        run = r.get(rsd.shardprefix + "run")
+        if run is not None and int(run) == 1:
+            exit('another process already running the script')
+        r.set(rsd.shardprefix + 'run', 1)
+
+        rsd.save_keylists()
+
+        firstrun = r.get(rsd.shardprefix + "firstrun")
+        firstrun = 0 if firstrun is None else int(firstrun)
+        if firstrun == 0:
+            rsd.flush_targets()
+            r.set(rsd.shardprefix + "firstrun", 1)
+
+        rsd.reshard_db(limit)
     else:
-      exit("""Supplied target cluster format is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
-      try : python redis-sharding.py --help""")
+        rsd.clean()
 
-  dbs = [int(k) for k in databases.split(',')]
-  if len(dbs) < 1:
-    exit("""Supplied list of db is wrong. e.g. python redis-sharding.py 127.0.0.1:6379,127.0.0.2:6379 node_1#127.0.0.1:63791,node_2#127.0.0.1:63792  0,1
-    try : python redis-sharding.py --help""")
-
-  try:
-    r = redis.StrictRedis(host=sources_cluster[0]['host'], port=sources_cluster[0]['port'], db=dbs[0])
-  except AttributeError as e:
-    exit('Please this script requires redis-py >= 2.4.10, your current version is :'+redis.__version__)
-
-  rsd = RedisSharding(sources_cluster, targets_cluster, dbs)
-
-  if clean == False:
-    #check if script already running
-    run = r.get(rsd.shardprefix + "run")
-    if run is not None and int(run) == 1:
-      exit('another process already running the script')
-    r.set(rsd.shardprefix + 'run', 1)
-
-    rsd.save_keylists()
-    
-    firstrun = r.get(rsd.shardprefix + "firstrun")
-    firstrun = 0 if firstrun is None else int(firstrun)
-    if firstrun == 0:
-      rsd.flush_targets()
-      r.set(rsd.shardprefix + "firstrun", 1)
-      
-    rsd.reshard_db(limit)
-  else:
-    rsd.clean()
-
-  r.set(rsd.shardprefix + 'run', 0)
+    r.set(rsd.shardprefix + 'run', 0)
 
 
 def usage():
-  print __doc__
+    print __doc__
 
 
 if __name__ == "__main__":
-  clean = False
-  try:
-    opts, args = getopt.getopt(sys.argv[1:], "hl:s:t:d:", ["help", "limit=", "sources=", "targets=", "databases=", "clean"])
-  except getopt.GetoptError:
-    usage()
-    sys.exit(2)
-  for opt, arg in opts:
-    if opt in ("-h", "--help"): usage(); sys.exit()
-    elif opt == "--clean": clean = True
-    elif opt in ("-l", "--limit"): limit = arg
-    elif opt in ("-s", "--sources"): sources = arg
-    elif opt in ("-t", "--targets"): targets = arg
-    elif opt in ("-d", "--databases"): databases = arg
+    clean = False
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hl:s:t:d:", ["help", "limit=", "sources=", "targets=", "databases=", "clean"])
+    except getopt.GetoptError:
+        usage()
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif opt == "--clean":
+            clean = True
+        elif opt in ("-l", "--limit"):
+            limit = arg
+        elif opt in ("-s", "--sources"):
+            sources = arg
+        elif opt in ("-t", "--targets"):
+            targets = arg
+        elif opt in ("-d", "--databases"):
+            databases = arg
 
-  try:
-    limit = int(limit)
-  except (NameError, TypeError, ValueError):
-    limit = None
+    try:
+        limit = int(limit)
+    except (NameError, TypeError, ValueError):
+        limit = None
 
-  try:
-    main(sources, targets, databases, limit, clean)
-  except NameError as e:
-    usage()
+    try:
+        main(sources, targets, databases, limit, clean)
+    except NameError as e:
+        usage()
