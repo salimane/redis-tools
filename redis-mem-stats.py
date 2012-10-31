@@ -42,6 +42,7 @@ __license__ = "MIT"
 import argparse
 import sys
 from collections import defaultdict
+from itertools import imap
 
 
 class RedisMemStats(object):
@@ -70,7 +71,7 @@ class RedisMemStats(object):
         pos = entry['key'].rfind(self.prefix_delim)
         if pos is not -1:
             self.prefixes[entry['key'][0:pos]] += size
-        #self.sizes.append((entry['size'], entry))
+        # self.sizes.append((entry['size'], entry))
 
     def _record_columns(self, sizes):
         for size, entry in sizes:
@@ -129,7 +130,7 @@ class RedisMemStats(object):
 
     def print_stats(self):
         self._pretty_print(self._general_stats(), 'Overall Stats')
-        #self._record_columns(self.sizes)
+        # self._record_columns(self.sizes)
         self._pretty_print(
             self._top_n(self.prefixes), 'Heaviest Prefixes', percentages=True)
         self._pretty_print(
@@ -154,6 +155,24 @@ class RedisMemStats(object):
             else:
                 self.skipped_lines += 1
                 continue
+
+    def gen_redis_proto(self, *cmd):
+        proto = ""
+        proto += "*" + str(len(cmd)) + "\r\n"
+        for arg in imap(self.encode, cmd):
+            proto += "$" + str(len(arg)) + "\r\n"
+            proto += arg + "\r\n"
+        return proto
+
+    def encode(self, value):
+        "Return a bytestring representation of the value"
+        if isinstance(value, bytes):
+            return value
+        if not isinstance(value, unicode):
+            value = str(value)
+        if isinstance(value, unicode):
+            value = value.encode('utf-8', 'strict')
+        return value
 
 
 if __name__ == '__main__':
