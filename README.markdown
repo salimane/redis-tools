@@ -53,6 +53,9 @@ in order to scale an application.
 The script probably needs to be added to a cron job if the keys are a lot because it only reshards a fix number of keys at a time
 and continue from there on the next run. It does this until there is no more keys to reshard
 
+You can use [rediscluster-py](https://github.com/salimane/rediscluster-py) or [rediscluster-php](https://github.com/salimane/rediscluster-php) as 
+client libraries of your new cluster of redis servers.
+
 ####Dependency:
 
     sudo easy_install -U redis
