@@ -17,33 +17,50 @@ DAEMON=/usr/bin/redis-server
 DAEMON_ARGS=/etc/redis/redis.conf
 NAME=redis-server
 DESC=redis-server
-PIDFILE=/var/run/redis.pid
+
+RUNDIR=/var/run/redis
+PIDFILE=$RUNDIR/redis-server.pid
 
 test -x $DAEMON || exit 0
+
+if [ -r /etc/default/$NAME ]
+then
+	. /etc/default/$NAME
+fi
 
 set -e
 
 case "$1" in
   start)
 	echo -n "Starting $DESC: "
+	mkdir -p $RUNDIR
 	touch $PIDFILE
-	chown redis:redis $PIDFILE
+	chown redis:redis $RUNDIR $PIDFILE
+	chmod 755 $RUNDIR
+
+	if [ -n "$ULIMIT" ]
+	then
+		ulimit -n $ULIMIT
+	fi
+
 	if start-stop-daemon --start --quiet --umask 007 --pidfile $PIDFILE --chuid redis:redis --exec $DAEMON -- $DAEMON_ARGS
 	then
 		echo "$NAME."
+		echo "start-stop-daemon --start --quiet --umask 007 --pidfile $PIDFILE --chuid redis:redis --exec $DAEMON -- $DAEMON_ARGS"
 	else
 		echo "failed"
 	fi
 	;;
   stop)
 	echo -n "Stopping $DESC: "
-	if start-stop-daemon --stop --retry 10 --quiet --oknodo --pidfile $PIDFILE --exec $DAEMON
+	if start-stop-daemon --stop --retry forever/TERM/1 --quiet --oknodo --pidfile $PIDFILE --exec $DAEMON
 	then
 		echo "$NAME."
 	else
 		echo "failed"
 	fi
 	rm -f $PIDFILE
+	sleep 1
 	;;
 
   restart|force-reload)
