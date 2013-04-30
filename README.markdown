@@ -1,3 +1,14 @@
+#**Generating Redis Protocol**
+
+Generate the Redis protocol, in raw format, in order to use 'redis-cli --pipe' command to massively and quickly insert/delete.... keys in a redis server.
+It accepts as input a pipe with redis commands formatted as "DEL key", "SET key value" ...
+
+####Usage:
+
+    echo "SET mykey1 value1\nDEL mykey2" > data.txt
+    cat data.txt | python gen_redis_proto.py | redis-cli --pipe
+
+
 #**Redis Copy**
 
 Redis Copy the keys in a source redis server into another target redis server.
@@ -53,7 +64,7 @@ in order to scale an application.
 The script probably needs to be added to a cron job if the keys are a lot because it only reshards a fix number of keys at a time
 and continue from there on the next run. It does this until there is no more keys to reshard
 
-You can use [rediscluster-py](https://github.com/salimane/rediscluster-py) or [rediscluster-php](https://github.com/salimane/rediscluster-php) as 
+You can use [rediscluster-py](https://github.com/salimane/rediscluster-py) or [rediscluster-php](https://github.com/salimane/rediscluster-php) as
 client libraries of your new cluster of redis servers.
 
 ####Dependency:
