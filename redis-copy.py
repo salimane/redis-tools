@@ -1,4 +1,4 @@
-#!/usr/bin/env python -tt
+#!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 """
 Redis Copy
@@ -219,7 +219,7 @@ class RedisCopy:
         print "Done.\n"
 
 
-def main(source, target, databases, limit=None, clean=False):
+def main(source, target, databases, limit=None, clean=False, flush=False):
     #getting source and target
     if (source == target):
         exit('The 2 servers adresses are the same. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
@@ -260,7 +260,7 @@ def main(source, target, databases, limit=None, clean=False):
         firstrun = r.get(mig.mprefix + "firstrun")
         firstrun = 0 if firstrun is None else int(firstrun)
         if firstrun == 0:
-            mig.flush_target()
+            mig.flush_target() if flush
             r.set(mig.mprefix + "firstrun", 1)
 
         mig.copy_db(limit)
@@ -276,8 +276,9 @@ def usage():
 
 if __name__ == "__main__":
     clean = False
+    flush = False
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hl:s:t:d:", ["help", "limit=", "source=", "target=", "databases=", "clean"])
+        opts, args = getopt.getopt(sys.argv[1:], "hl:s:t:d:f", ["help", "limit=", "source=", "target=", "databases=", "clean", "flush"])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -295,6 +296,8 @@ if __name__ == "__main__":
             target = arg
         elif opt in ("-d", "--databases"):
             databases = arg
+        elif opt in ("-f", "--flush"):
+            flush = True
 
     try:
         limit = int(limit)
@@ -302,6 +305,6 @@ if __name__ == "__main__":
         limit = None
 
     try:
-        main(source, target, databases, limit, clean)
+        main(source, target, databases, limit, clean, flush)
     except NameError as e:
         usage()
