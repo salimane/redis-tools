@@ -261,7 +261,8 @@ def main(source, target, databases, limit=None, clean=False, flush=False, prefix
         firstrun = r.get(mig.mprefix + "firstrun")
         firstrun = 0 if firstrun is None else int(firstrun)
         if firstrun == 0:
-            mig.flush_target() if flush
+            if flush:
+                mig.flush_target()
             r.set(mig.mprefix + "firstrun", 1)
 
         mig.copy_db(limit)
