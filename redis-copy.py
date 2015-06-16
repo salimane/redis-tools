@@ -279,6 +279,7 @@ def usage():
 if __name__ == "__main__":
     clean = False
     flush = False
+    prefix = "*"
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hl:s:t:d:fp:", ["help", "limit=", "source=", "target=", "databases=", "clean", "flush", "prefix="])
     except getopt.GetoptError:
