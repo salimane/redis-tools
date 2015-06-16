@@ -17,6 +17,7 @@ Options:
   -h, --help                  show this help
   --clean                     clean all variables, temp lists created previously by the script
   -f, --flush                 flush target bucket on first run
+  -p ..., --prefix=...        optional prefix: only migrate keys wirh this prefix, e.g. production_rw*
 
 Dependencies: redis (redis-py: sudo pip install redis)
 
