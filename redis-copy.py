@@ -1,4 +1,4 @@
-#!/usr/bin/env python -tt
+#!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 """
 Redis Copy
@@ -16,6 +16,8 @@ Options:
   -d ..., --databases=...     comma separated list of redis databases to select when copying. e.g. 2,5
   -h, --help                  show this help
   --clean                     clean all variables, temp lists created previously by the script
+  -f, --flush                 flush target bucket on first run
+  -p ..., --prefix=...        optional prefix: only migrate keys wirh this prefix, e.g. production_rw*
 
 Dependencies: redis (redis-py: sudo pip install redis)
 
@@ -71,7 +73,7 @@ class RedisCopy:
         self.target = target
         self.dbs = dbs
 
-    def save_keylists(self):
+    def save_keylists(self, prefix="*"):
         """Function to save the keys' names of the source redis server into a list for later usage.
         """
 
@@ -88,7 +90,7 @@ class RedisCopy:
                 print "Saving the keys in %s to temp keylist...\n" % servername
                 moved = 0
                 r.delete(self.mprefix + self.keylistprefix + servername)
-                for key in r.keys('*'):
+                for key in r.keys(prefix):
                     moved += 1
                     r.rpush(
                         self.mprefix + self.keylistprefix + servername, key)
@@ -219,7 +221,7 @@ class RedisCopy:
         print "Done.\n"
 
 
-def main(source, target, databases, limit=None, clean=False):
+def main(source, target, databases, limit=None, clean=False, flush=False, prefix="*"):
     #getting source and target
     if (source == target):
         exit('The 2 servers adresses are the same. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
@@ -255,12 +257,13 @@ def main(source, target, databases, limit=None, clean=False):
             exit('another process already running the script')
         r.set(mig.mprefix + 'run', 1)
 
-        mig.save_keylists()
+        mig.save_keylists(prefix)
 
         firstrun = r.get(mig.mprefix + "firstrun")
         firstrun = 0 if firstrun is None else int(firstrun)
         if firstrun == 0:
-            mig.flush_target()
+            if flush:
+                mig.flush_target()
             r.set(mig.mprefix + "firstrun", 1)
 
         mig.copy_db(limit)
@@ -276,8 +279,10 @@ def usage():
 
 if __name__ == "__main__":
     clean = False
+    flush = False
+    prefix = "*"
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hl:s:t:d:", ["help", "limit=", "source=", "target=", "databases=", "clean"])
+        opts, args = getopt.getopt(sys.argv[1:], "hl:s:t:d:fp:", ["help", "limit=", "source=", "target=", "databases=", "clean", "flush", "prefix="])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -295,6 +300,10 @@ if __name__ == "__main__":
             target = arg
         elif opt in ("-d", "--databases"):
             databases = arg
+        elif opt in ("-f", "--flush"):
+            flush = True
+        elif opt in ("-p", "--prefix"):
+            prefix = arg
 
     try:
         limit = int(limit)
@@ -302,6 +311,6 @@ if __name__ == "__main__":
         limit = None
 
     try:
-        main(source, target, databases, limit, clean)
+        main(source, target, databases, limit, clean, flush, prefix)
     except NameError as e:
         usage()
