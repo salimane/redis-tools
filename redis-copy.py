@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 """
 Redis Copy
@@ -15,31 +14,33 @@ Options:
   -t ..., --target=...        target redis server "ip:port" to copy keys to. e.g. 192.168.0.101:6379
   -d ..., --databases=...     comma separated list of redis databases to select when copying. e.g. 2,5
   -h, --help                  show this help
-  --clean                     clean all variables, temp lists created previously by the script
   -f, --flush                 flush target bucket on first run
   -p ..., --prefix=...        optional prefix: only migrate keys wirh this prefix, e.g. production_rw*
+  --spass=...                 password for source redis server
+  --tpass=...                 password for target redis server
+  --clean                     clean all variables, temp lists created previously by the script
 
 Dependencies: redis (redis-py: sudo pip install redis)
 
 Examples:
-  python redis-copy.py --help                                show this doc
+  python redis-copy.py --help                             show this doc
 
   python redis-copy.py \
   --source=192.168.0.99:6379 \
   --target=192.168.0.101:6379 \
-  --databases=2,5 --clean                                 clean all variables, temp lists created previously by the script
+  --databases=2:2,5:5 --clean                             clean all variables, temp lists created previously by the script
 
   python redis-copy.py \
   --source=192.168.0.99:6379 \
   --target=192.168.0.101:6379 \
-  --databases=2,5                                         copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
-                                                          with the default limit of 10000 per script run
+  --databases=2:2,5:1                                     copy all keys in db 2 and 5 from server 192.168.0.99:6379 to db 2 and db 1
+                                                          in server 192.168.0.101:6379 with the default limit of 10000 per script run
 
   python redis-copy.py --limit=1000 \
   --source=192.168.0.99:6379 \
   --target=192.168.0.101:6379 \
-  --databases=2,5                                         copy all keys in db 2 and 5 from server 192.168.0.99:6379 to server 192.168.0.101:6379
-                                                          with a limit of 1000 per script run
+  --databases=2:2,5:1                                     copy all keys in db 2 and 5 from server 192.168.0.99:6379 to db 2 and db 1
+                                                          in server 192.168.0.101:6379 with a limit of 1000 per script run
 
 """
 
@@ -68,37 +69,43 @@ class RedisCopy:
     # numbers of keys to copy on each iteration
     limit = 10000
 
-    def __init__(self, source, target, dbs):
+    def __init__(self, source, target, dbs, spass, tpass):
         self.source = source
         self.target = target
         self.dbs = dbs
+        self.spass = spass
+        self.tpass = tpass
 
     def save_keylists(self, prefix="*"):
         """Function to save the keys' names of the source redis server into a list for later usage.
         """
 
         for db in self.dbs:
+            db = int(db[0])
             servername = self.source['host'] + ":" + str(
                 self.source['port']) + ":" + str(db)
             #get redis handle for server-db
             r = redis.StrictRedis(
-                host=self.source['host'], port=self.source['port'], db=db)
+                host=self.source['host'], port=self.source['port'], db=db, password=self.spass)
+
+            #returns the number of keys in the current database
             dbsize = r.dbsize()
             #check whether we already have the list, if not get it
             hkl = r.get(self.mprefix + self.hkeylistprefix + servername)
             if hkl is None or int(hkl) != 1:
-                print "Saving the keys in %s to temp keylist...\n" % servername
+                print ("Saving the keys in %s to temp keylist...\n" % servername)
                 moved = 0
                 r.delete(self.mprefix + self.keylistprefix + servername)
+                #returns a list of keys matching pattern
                 for key in r.keys(prefix):
                     moved += 1
-                    r.rpush(
-                        self.mprefix + self.keylistprefix + servername, key)
+                    #push values onto the tail of the list name
+                    r.rpush(self.mprefix + self.keylistprefix + servername, key)
                     if moved % self.limit == 0:
-                        print  "%d keys of %s inserted in temp keylist at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
-
+                        print  ("%d keys of %s inserted in temp keylist at %s...\n" % (moved, servername, time.strftime("%Y-%m-%d %I:%M:%S")))
+                #set the value at key name to value
                 r.set(self.mprefix + self.hkeylistprefix + servername, 1)
-            print "ALL %d keys of %s already inserted to temp keylist ...\n\n" % (dbsize - 1, servername)
+            print ("ALL %d keys of %s already inserted to temp keylist ...\n\n" % (dbsize - 1, servername))
 
     def copy_db(self, limit=None):
         """Function to copy all the keys from the source into the new target.
@@ -116,42 +123,48 @@ class RedisCopy:
 
         for db in self.dbs:
             servername = self.source['host'] + ":" + str(
-                self.source['port']) + ":" + str(db)
-            print "Processing keys copying of server %s at %s...\n" % (
-                servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+                self.source['port']) + ":" + db[0]
+            print ("Processing keys copying of server %s at %s...\n" % (
+                servername, time.strftime("%Y-%m-%d %I:%M:%S")))
             #get redis handle for current source server-db
             r = redis.StrictRedis(
-                host=self.source['host'], port=self.source['port'], db=db)
+                host=self.source['host'], port=self.source['port'], db=int(db[0]), password=self.spass)
             moved = 0
-            dbsize = r.dbsize() - 1
+            # dbsize without run key, keylist key, havekeylist key, firstrun key
+            dbsize = r.dbsize() - 4
             #get keys already moved
+            #return the value at key name, or None if the key doesn’t exist
             keymoved = r.get(self.mprefix + "keymoved:" + servername)
             keymoved = 0 if keymoved is None else int(keymoved)
             #check if we already have all keys copied for current source server-db
             if dbsize < keymoved:
-                print "ALL %d keys from %s have already been copied.\n" % (
-                    dbsize, servername)
+                print ("ALL %d keys from %s have already been copied.\n" % (
+                    dbsize, servername))
                 continue
 
-            print "Started copy of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, time.strftime("%Y-%m-%d %I:%M:%S"))
+            print ("Started copy of %s keys from %d to %d at %s...\n" % (servername, keymoved, dbsize, time.strftime("%Y-%m-%d %I:%M:%S")))
 
             #get redis handle for corresponding target server-db
             rr = redis.StrictRedis(
-                host=self.target['host'], port=self.target['port'], db=db)
+                host=self.target['host'], port=self.target['port'], db=int(db[1]), password=self.tpass)
 
             #max index for lrange
             newkeymoved = keymoved + \
                 self.limit if dbsize > keymoved + self.limit else dbsize
 
+            #return a slice of the list name between position start and end
             for key in r.lrange(self.mprefix + self.keylistprefix + servername, keymoved, newkeymoved):
                 #get key type
-                ktype = r.type(key)
+                ktype = r.type(key).decode('utf-8')
+                key = key.decode('utf-8')
                 #if undefined type go to next key
                 if ktype == 'none':
                     continue
 
                 #save key to target server-db
                 if ktype == 'string':
+                    if key == self.mprefix + "run":
+                        continue
                     rr.set(key, r.get(key))
                 elif ktype == 'hash':
                     rr.hmset(key, r.hgetall(key))
@@ -182,81 +195,82 @@ class RedisCopy:
                 moved += 1
 
                 if moved % 10000 == 0:
-                    print "%d keys have been copied on %s at %s...\n" % (
-                        moved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+                    print ("%d keys have been copied on %s at %s...\n" % (
+                        moved, servername, time.strftime("%Y-%m-%d %I:%M:%S")))
 
             r.set(self.mprefix + "keymoved:" + servername, newkeymoved)
-            print "%d keys have been copied on %s at %s\n" % (
-                newkeymoved, servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+            print ("%d keys have been copied on %s at %s\n" % (
+                newkeymoved, servername, time.strftime("%Y-%m-%d %I:%M:%S")))
 
     def flush_target(self):
         """Function to flush the target server.
         """
         for db in self.dbs:
             servername = self.target['host'] + ":" + str(
-                self.target['port']) + ":" + str(db)
-            print "Flushing server %s at %s...\n" % (
-                servername, time.strftime("%Y-%m-%d %I:%M:%S"))
-            r = redis.StrictRedis(
-                host=self.target['host'], port=self.target['port'], db=db)
-            r.flushdb()
-            print "Flushed server %s at %s...\n" % (
-                servername, time.strftime("%Y-%m-%d %I:%M:%S"))
+                self.target['port']) + ":" + db[1]
+            print ("Flushing server %s at %s...\n" % (
+                servername, time.strftime("%Y-%m-%d %I:%M:%S")))
+            rr = redis.StrictRedis(
+                host=self.target['host'], port=self.target['port'], db=int(db[1]), password=tpass)
+            #delete all keys in the current database
+            rr.flushdb()
+            print ("Flushed server %s at %s...\n" % (
+                servername, time.strftime("%Y-%m-%d %I:%M:%S")))
 
     def clean(self):
         """Function to clean all variables, temp lists created previously by the script.
         """
 
-        print "Cleaning all temp variables...\n"
+        print ("Cleaning all temp variables...\n")
         for db in self.dbs:
             servername = self.source['host'] + ":" + str(
-                self.source['port']) + ":" + str(db)
+                self.source['port']) + ":" + db[0]
             r = redis.StrictRedis(
-                host=self.source['host'], port=self.source['port'], db=db)
+                host=self.source['host'], port=self.source['port'], db=int(db[0]), password=spass)
             r.delete(self.mprefix + "keymoved:" + servername)
             r.delete(self.mprefix + self.keylistprefix + servername)
             r.delete(self.mprefix + self.hkeylistprefix + servername)
             r.delete(self.mprefix + "firstrun")
-            r.delete(self.mprefix + 'run')
-        print "Done.\n"
+            r.delete(self.mprefix + "run")
+        print ("Done.\n")
 
 
-def main(source, target, databases, limit=None, clean=False, flush=False, prefix="*"):
+def main(source, target, databases, spass, tpass, limit=None, clean=False, flush=False, prefix="*"):
     #getting source and target
     if (source == target):
-        exit('The 2 servers adresses are the same. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
+        exit('The 2 servers adresses are the same.')
     so = source.split(':')
     if len(so) == 2:
         source_server = {'host': so[0], 'port': int(so[1])}
     else:
-        exit('Supplied source address is wrong. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
+        exit('Supplied source address is wrong.')
 
     sn = target.split(':')
     if len(sn) == 2:
         target_server = {'host': sn[0], 'port': int(sn[1])}
     else:
-        exit('Supplied target address is wrong. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
+        exit('Supplied target address is wrong.')
 
     #getting the dbs
-    dbs = [int(k) for k in databases.split(',')]
+    dbs = [k.split(':') for k in databases.split(',')]
     if len(dbs) < 1:
-        exit('Supplied list of db is wrong. e.g. python redis-copy.py 127.0.0.1:6379 127.0.0.1:63791  0,1')
+        exit('Supplied list of db is wrong.')
 
     try:
         r = redis.StrictRedis(
-            host=source_server['host'], port=source_server['port'], db=dbs[0])
+            host=source_server['host'], port=source_server['port'], db=int(dbs[0][0]), password=spass)
     except AttributeError as e:
         exit('Please this script requires redis-py >= 2.4.10, your current version is :' + redis.__version__)
 
-    mig = RedisCopy(source_server, target_server, dbs)
+    mig = RedisCopy(source_server, target_server, dbs, spass, tpass)
 
     if clean == False:
         #check if script already running
         run = r.get(mig.mprefix + "run")
         if run is not None and int(run) == 1:
             exit('another process already running the script')
-        r.set(mig.mprefix + 'run', 1)
 
+        r.set(mig.mprefix + "run", 1)
         mig.save_keylists(prefix)
 
         firstrun = r.get(mig.mprefix + "firstrun")
@@ -267,26 +281,31 @@ def main(source, target, databases, limit=None, clean=False, flush=False, prefix
             r.set(mig.mprefix + "firstrun", 1)
 
         mig.copy_db(limit)
+        # setting script completion flag
+        r.set(mig.mprefix + "run", 0)
+
     else:
         mig.clean()
 
-    r.set(mig.mprefix + 'run', 0)
-
-
 def usage():
-    print __doc__
+    print (__doc__)
 
 
 if __name__ == "__main__":
     clean = False
     flush = False
     prefix = "*"
+    spass = tpass = None
+
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hl:s:t:d:fp:", ["help", "limit=", "source=", "target=", "databases=", "clean", "flush", "prefix="])
+        opts, args = getopt.getopt(sys.argv[1:], "hl:s:t:d:fp:", ["help", "limit=", "source=", "target=", \
+                                                                  "databases=", "clean", "flush", "prefix=", "spass=", "tpass="])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
+
     for opt, arg in opts:
+
         if opt in ("-h", "--help"):
             usage()
             sys.exit()
@@ -304,6 +323,10 @@ if __name__ == "__main__":
             flush = True
         elif opt in ("-p", "--prefix"):
             prefix = arg
+        elif opt in ("--spass"):
+            spass = arg
+        elif opt in ("--tpass"):
+            tpass = arg
 
     try:
         limit = int(limit)
@@ -311,6 +334,6 @@ if __name__ == "__main__":
         limit = None
 
     try:
-        main(source, target, databases, limit, clean, flush, prefix)
+        main(source, target, databases, spass, tpass, limit, clean, flush, prefix)
     except NameError as e:
         usage()
